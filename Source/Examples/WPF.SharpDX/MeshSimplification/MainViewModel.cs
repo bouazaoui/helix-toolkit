@@ -36,6 +36,29 @@ namespace MeshSimplification
         public string Name { get; set; }
         public MainViewModel ViewModel { get { return this; } }
 
+        private List<string> models;
+
+        public List<string> Models
+        {
+            get { return models; }
+            set { models = value; OnPropertyChanged(); }
+        }
+
+        private string selectedModel;
+
+        public string SelectedModel
+        {
+            get { return selectedModel; }
+            set { 
+                selectedModel = value; 
+                OnPropertyChanged();
+                var models = Load3ds(value).Select(x => x.Geometry as MeshGeometry3D).ToArray();               
+                Model = models[0];
+                OrgMesh = Model;
+            }
+        }
+
+
         private MeshGeometry3D model;
         public MeshGeometry3D Model
         {
@@ -134,8 +157,11 @@ namespace MeshSimplification
             // ----------------------------------------------
             // scene model3d
             this.ModelMaterial = PhongMaterials.Silver;
+            
+            Models = new List<string> { "wall12.obj", "suzanne.obj" };
+            SelectedModel = Models[0];
 
-            var models = Load3ds("wall12.obj").Select(x => x.Geometry as MeshGeometry3D).ToArray();
+            //var models = Load3ds("wall12.obj").Select(x => x.Geometry as MeshGeometry3D).ToArray();
             //var scale = new Vector3(1f);
 
             //foreach (var item in caritems)
@@ -146,8 +172,8 @@ namespace MeshSimplification
             //    }
 
             //}
-            Model = models[0];
-            OrgMesh = Model;
+            //Model = models[0];
+            //OrgMesh = Model;
 
             //ModelTransform = new Media3D.RotateTransform3D() { Rotation = new Media3D.AxisAngleRotation3D(new Vector3D(1, 0, 0), -90) };
 

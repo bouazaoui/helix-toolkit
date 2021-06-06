@@ -60,6 +60,10 @@
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Orientation="Vertical">
+            <ComboBox 
+                Margin="4"
+                ItemsSource="{Binding Models}"
+                SelectedValue="{Binding SelectedModel}"/>
             <CheckBox
                 Margin="4"
                 Foreground="White"
