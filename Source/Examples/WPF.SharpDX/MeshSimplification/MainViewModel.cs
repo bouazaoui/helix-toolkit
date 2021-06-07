@@ -30,9 +30,14 @@ namespace MeshSimplification
     using System.Windows.Input;
     using System.Threading.Tasks;
     using System.Diagnostics;
+    using HelixToolkit.Wpf.SharpDX.Assimp;
+    using HelixToolkit.Wpf.SharpDX.Model.Scene;
+    using System.Windows.Threading;
 
     public class MainViewModel : BaseViewModel
     {
+        private Dispatcher dispatcher; 
+        public event Action OnChangedModel;
         public string Name { get; set; }
         public MainViewModel ViewModel { get { return this; } }
 
@@ -49,12 +54,11 @@ namespace MeshSimplification
         public string SelectedModel
         {
             get { return selectedModel; }
-            set { 
-                selectedModel = value; 
+            set
+            {
+                selectedModel = value;
                 OnPropertyChanged();
-                var models = Load3ds(value).Select(x => x.Geometry as MeshGeometry3D).ToArray();               
-                Model = models[0];
-                OrgMesh = Model;
+                AssimpLoad(value);
             }
         }
 
@@ -65,9 +69,9 @@ namespace MeshSimplification
             get { return model; }
             private set
             {
-                if(SetValue(ref model, value))
+                if (SetValue(ref model, value) && model != null)
                 {
-                    NumberOfTriangles = model.Indices.Count/3;
+                    NumberOfTriangles = model.Indices.Count / 3;
                     NumberOfVertices = model.Positions.Count;
                 }
             }
@@ -111,7 +115,7 @@ namespace MeshSimplification
         {
             set
             {
-                if(SetValue(ref showWireframe, value))
+                if (SetValue(ref showWireframe, value))
                 {
                     FillMode = value ? FillMode.Wireframe : FillMode.Solid;
                 }
@@ -135,6 +139,7 @@ namespace MeshSimplification
 
         public MainViewModel()
         {
+            dispatcher = Application.Current.Dispatcher;
             EffectsManager = new DefaultEffectsManager();
 
             // ----------------------------------------------
@@ -157,8 +162,8 @@ namespace MeshSimplification
             // ----------------------------------------------
             // scene model3d
             this.ModelMaterial = PhongMaterials.Silver;
-            
-            Models = new List<string> { "wall12.obj", "suzanne.obj" };
+
+            Models = new List<string> { "lens.stl", "bottle.stl", "wall12.obj", "suzanne.obj" };
             SelectedModel = Models[0];
 
             //var models = Load3ds("wall12.obj").Select(x => x.Geometry as MeshGeometry3D).ToArray();
@@ -178,13 +183,48 @@ namespace MeshSimplification
             //ModelTransform = new Media3D.RotateTransform3D() { Rotation = new Media3D.AxisAngleRotation3D(new Vector3D(1, 0, 0), -90) };
 
             SimplifyCommand = new RelayCommand(Simplify, CanSimplify);
-            ResetCommand = new RelayCommand((o)=> { Model = OrgMesh; simHelper = new MeshSimplification(Model); }, CanSimplify);
-            simHelper = new MeshSimplification(Model);
-        }
+            ResetCommand = new RelayCommand((o) => { Model = OrgMesh; simHelper = new MeshSimplification(Model); }, CanSimplify);
 
+        }
+        public void AssimpLoad(string path)
+        {
+            Busy = true;
+            Task.Factory.StartNew(() =>
+            {
+                var importer = new Importer();
+                return importer.Load(path);
+
+            }).ContinueWith(antecedent =>
+            {
+                var scene = antecedent.Result;
+                if (scene != null)
+                {
+                    var node = scene.Root.Traverse()
+                      .FirstOrDefault(geom => geom is MaterialGeometryNode);
+
+                    Model = ((MaterialGeometryNode)node).Geometry as MeshGeometry3D;
+                    OrgMesh = Model;
+                    simHelper = new MeshSimplification(Model);
+                    dispatcher.BeginInvoke(new Action(()=> OnChangedModel?.Invoke()));
+                }
+                else
+                {
+                    MessageBox.Show("Model not loaded." + Environment.NewLine + "Not enough memory ?", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    Model = null;
+                    OrgMesh = null;
+                }
+                Busy = false;
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
         public List<Object3D> Load3ds(string path)
         {
             var reader = new ObjReader();
+            var list = reader.Read(path);
+            return list;
+        }
+        public List<Object3D> LoadSTL(string path)
+        {
+            var reader = new StLReader();
             var list = reader.Read(path);
             return list;
         }
@@ -212,7 +252,7 @@ namespace MeshSimplification
             Busy = true;
             int size = Model.Indices.Count / 3 / 2;
             CalculationTime = 0;
-            Task.Factory.StartNew(() => 
+            Task.Factory.StartNew(() =>
             {
                 var sw = Stopwatch.StartNew();
                 var model = simHelper.Simplify(size, 7, true, Lossless);
@@ -220,12 +260,12 @@ namespace MeshSimplification
                 CalculationTime = sw.ElapsedMilliseconds;
                 model.Normals = model.CalculateNormals();
                 return model;
-            }).ContinueWith(x => 
+            }).ContinueWith(x =>
             {
                 Busy = false;
                 Model = x.Result;
                 CommandManager.InvalidateRequerySuggested();
-            }, TaskScheduler.FromCurrentSynchronizationContext());           
+            }, TaskScheduler.FromCurrentSynchronizationContext());
         }
     }
 }

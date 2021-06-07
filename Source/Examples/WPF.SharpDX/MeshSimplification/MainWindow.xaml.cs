@@ -23,7 +23,9 @@ namespace MeshSimplification
         public MainWindow()
         {
             InitializeComponent();
-            this.DataContext = new MainViewModel();
+            var vm = new MainViewModel();
+            this.DataContext = vm;
+            vm.OnChangedModel += () => view1.ZoomExtents();
             Closed += (s, e) => {
                 if (DataContext is IDisposable)
                 {
